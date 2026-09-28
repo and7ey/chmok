@@ -4,6 +4,7 @@ import { TIERS, canPayOff, chargeFor, netWorth, payoffCost, taskOf } from '../ga
 import { chapterAt, CURRENCY, moodName } from '../game/story';
 import { normCode, type Role } from '../net/protocol';
 import { useGame, useMoveTimers, type NetParams, type SessionConfig } from '../net/useGame';
+import { linkLabel } from '../net/transport';
 import { hasWebGL } from './three/capabilities';
 import { A, SiteNav } from './SiteChrome';
 import { HostLobbyScreen, JoinForm, makeRoomCode, Menu, savedName, Setup } from './Lobby';
@@ -383,7 +384,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
             </span>
             {net && (
               <span className="pill">
-                {room.kind === 'ws' ? 'онлайн' : 'локально'} ·{' '}
+                {linkLabel(room.kind)} ·{' '}
                 {room.status === 'open' ? (room.peerPresent ? `${room.peerName || 'партнёр'} на связи` : 'ждём партнёра') : 'связь…'}
                 {room.latency !== null ? ` · ${room.latency} мс` : ''}
               </span>
@@ -497,7 +498,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
     <main className="wrap" style={{ padding: '60px 22px 80px' }}>
       <div className="card card--pad" style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center' }}>
         <p className="eyebrow">
-          {room.kind === 'ws' ? 'Онлайн' : 'Локальная комната'} · {net?.room}
+          {room.kind === 'bc' ? 'Локальная комната' : 'Онлайн'} · {net?.room}
         </p>
         <h1 className="h2" style={{ fontSize: 30 }}>
           {room.status === 'open' ? 'Ждём первый ход хоста' : 'Соединяемся с комнатой'}

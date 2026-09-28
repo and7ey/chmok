@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Action, GameState } from '../game/types';
-import { createTransport, type Status, type Transport } from './transport';
+import { acquireTransport, type Kind, type Status, type Transport } from './transport';
 import type { AppMsg, Role } from './protocol';
 
 const PING_EVERY = 4000;
 const PEER_TIMEOUT = 13000;
 
 export interface Room {
-  kind: 'ws' | 'bc' | 'off';
+  kind: Kind | 'off';
   status: Status;
   peerName: string | null;
   peerPresent: boolean;
@@ -44,7 +44,7 @@ export function useRoom({ room, role, name, hostState, onIntent, onState, onChat
   const [latency, setLatency] = useState<number | null>(null);
 
   useEffect(() => {
-    const t = createTransport(room, role, name);
+    const t = acquireTransport(room, role, name);
     transportRef.current = t;
     setKind(t.kind);
 

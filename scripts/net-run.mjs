@@ -224,7 +224,7 @@ if (await guest_.js("!!document.querySelector('#code')")) {
 }
 log('guest joined');
 
-await host_.waitHas('в комнате', 25000);
+await host_.waitHas('в комнате', 60000);
 log('host sees peer:', (await host_.text()).match(/[^\n]*в комнате[^\n]*/)?.[0]);
 
 await host_.type('#myname', 'Андрей');

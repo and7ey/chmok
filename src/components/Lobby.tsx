@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { makeCode, normCode } from '../net/protocol';
-import { relayUrl, transportKind } from '../net/transport';
+import { linkHint, relayUrl, transportKind } from '../net/transport';
 import { useRoom } from '../net/useRoom';
 import type { SessionConfig } from '../net/useGame';
 import { MOODS } from '../game/story';
@@ -174,9 +174,9 @@ export function Menu({ onPick }: { onPick: (mode: 'solo' | 'host' | 'guest') => 
             Выберите, как садитесь
           </h1>
           <p className="muted" style={{ fontSize: 13.5, marginTop: 8 }}>
-            {transportKind() === 'ws'
-              ? 'Онлайн идёт через ретранслятор — играть можно с разных устройств.'
-              : 'Ретранслятора не задано: онлайн будет между двумя вкладками одного браузера. Добавьте ?relay=wss://адрес — и можно играть через интернет.'}
+            {transportKind() === 'bc'
+              ? 'Браузер без WebRTC: онлайн останется между двумя вкладками одного браузера.'
+              : `Онлайн — ${linkHint(transportKind())}: играть можно с разных устройств.`}
           </p>
           <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
             {MODES.map((m) => (
@@ -219,7 +219,7 @@ export function JoinForm({
           onChange={(v) => setCode(codeFromPaste(v))}
           placeholder="NAZR"
           maxLength={6}
-          hint={transportKind() === 'ws' ? undefined : 'Без ретранслятора это будет вторая вкладка этого браузера.'}
+          hint={transportKind() === 'bc' ? 'Без WebRTC это будет вторая вкладка этого браузера.' : undefined}
         />
         <Field id="gname" label="Как вас зовут" value={name} onChange={setName} maxLength={16} />
       </div>
@@ -263,7 +263,6 @@ export function HostLobbyScreen({
   });
   const [copied, setCopied] = useState(false);
   const link = inviteLink(code, 'guest');
-  const ws = transportKind() === 'ws';
 
   return (
     <>
@@ -276,7 +275,7 @@ export function HostLobbyScreen({
               {code}
             </p>
             <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <span className="pill">{ws ? 'через ретранслятор' : 'локально: две вкладки'}</span>
+              <span className="pill">{linkHint(room.kind === 'off' ? transportKind() : room.kind)}</span>
               <span className="pill">
                 {room.status === 'open'
                   ? room.peerPresent

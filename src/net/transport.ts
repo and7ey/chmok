@@ -1,9 +1,11 @@
+import { rtcTransport } from './p2p';
 import { decode, type NetMsg, type Role } from './protocol';
 
 export type Status = 'connecting' | 'open' | 'closed';
+export type Kind = 'ws' | 'rtc' | 'bc';
 
 export interface Transport {
-  readonly kind: 'ws' | 'bc';
+  readonly kind: Kind;
   readonly room: string;
   send(msg: NetMsg): void;
   close(): void;
@@ -12,6 +14,14 @@ export interface Transport {
 }
 
 const RELAY_KEY = 'chmok.relay';
+
+type Link = Kind | 'off';
+
+/** Как называем канал связи в плашках интерфейса. */
+export const linkLabel = (link: Link) =>
+  ({ ws: 'онлайн', rtc: 'напрямую', bc: 'локально', off: 'связь' })[link];
+export const linkHint = (link: Link) =>
+  ({ ws: 'через ретранслятор', rtc: 'напрямую, без сервера', bc: 'локально: две вкладки', off: 'ищем канал…' })[link];
 
 /** Адрес ретранслятора: ?relay=wss://host, затем localStorage, затем VITE_RELAY_URL. */
 export function relayUrl(): string {
@@ -23,9 +33,14 @@ export function relayUrl(): string {
   return localStorage.getItem(RELAY_KEY) || import.meta.env.VITE_RELAY_URL || '';
 }
 
-/** Без ретранслятора играем в двух вкладках одного браузера — тот же протокол, без сервера. */
-export function transportKind(): 'ws' | 'bc' {
-  return relayUrl() ? 'ws' : 'bc';
+/**
+ * Без явного ретранслятора соединяемся напрямую через WebRTC: работает между
+ * устройствами и ничего не хранит. BroadcastChannel — запасной вариант для
+ * браузеров без RTCPeerConnection.
+ */
+export function transportKind(): Kind {
+  if (relayUrl()) return 'ws';
+  return typeof RTCPeerConnection === 'function' ? 'rtc' : 'bc';
 }
 
 function wsTransport(room: string, role: Role, name: string): Transport {
@@ -106,5 +121,77 @@ function bcTransport(room: string, role: Role): Transport {
 }
 
 export function createTransport(room: string, role: Role, name: string): Transport {
-  return transportKind() === 'ws' ? wsTransport(room, role, name) : bcTransport(room, role);
+  const kind = transportKind();
+  if (kind === 'ws') return wsTransport(room, role, name);
+  if (kind === 'rtc') return rtcTransport(room);
+  return bcTransport(room, role);
+}
+
+interface Pooled extends Transport {
+  owners: number;
+  park: number | null;
+  status: Status;
+  detach(): void;
+}
+
+const pool = new Map<string, Pooled>();
+const PARK_MS = 5000;
+
+/**
+ * Лобби и игра — одна и та же комната: транспорт переживает смену экрана.
+ * Иначе хост выходит из лобби, рвёт своё соединение, а гость остаётся с
+ * мёртвым пиром — WebRTC этого не прощает, в отличие от BroadcastChannel.
+ * Имя в ключ не входит: псевдоним хост меняет уже в лобби, а переименование
+ * не стоит разрыва пары.
+ */
+export function acquireTransport(room: string, role: Role, name: string): Transport {
+  const key = `${room}|${role}`;
+  let held = pool.get(key);
+  if (!held) {
+    const inner = createTransport(room, role, name);
+    const self: Pooled = {
+      kind: inner.kind,
+      room: inner.room,
+      owners: 0,
+      park: null,
+      status: 'connecting',
+      onMessage: null,
+      onStatus: null,
+      send: (msg) => inner.send(msg),
+      close: () => release(self),
+      detach: () => {
+        self.onMessage = null;
+        self.onStatus = null;
+        pool.delete(key);
+        inner.onMessage = null;
+        inner.onStatus = null;
+        inner.close();
+      },
+    };
+    inner.onMessage = (msg) => self.onMessage?.(msg);
+    inner.onStatus = (status) => {
+      self.status = status;
+      self.onStatus?.(status);
+    };
+    pool.set(key, self);
+    held = self;
+  }
+  if (held.park !== null) {
+    clearTimeout(held.park);
+    held.park = null;
+  }
+  held.owners += 1;
+  // Новый владелец уже открытой комнаты обязан поздороваться сам.
+  if (held.status === 'open') queueMicrotask(() => held.onStatus?.('open'));
+  return held;
+}
+
+function release(p: Pooled): void {
+  p.owners -= 1;
+  if (p.owners > 0) return;
+  p.park = window.setTimeout(() => {
+    p.park = null;
+    if (p.owners > 0) return;
+    p.detach();
+  }, PARK_MS);
 }
