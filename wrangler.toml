@@ -1,0 +1,12 @@
+name = "chmok-relay"
+main = "server/worker.ts"
+compatibility_date = "2026-09-01"
+
+# Комната = один Durable Object. Бесплатный тариф: 100 000 запросов/сут, хостинг не нужен.
+[[durable_objects.bindings]]
+name = "CHMOK_ROOM"
+class_name = "RoomDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO"]
