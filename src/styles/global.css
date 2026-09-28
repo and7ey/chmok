@@ -229,6 +229,9 @@ svg {
 }
 
 /* ============ header / nav ============ */
+section[id] {
+  scroll-margin-top: 88px;
+}
 .nav {
   position: sticky;
   top: 0;

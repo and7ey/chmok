@@ -1,18 +1,46 @@
 import { useEffect, useState } from 'react';
 import { FOOTER, SITE } from '../content/copy';
 
-export const go = (path: string) => {
-  window.location.hash = path;
-  window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+const NAV_OFFSET = 88;
+
+/**
+ * Переход к секции лендинга: хэш-роутер не даёт нативных якорей. Прокрутку может сбить
+ * перерисовка (ленивое 3D-поле, смена маршрута), поэтому повторяем, пока секция не встанет на место.
+ */
+const jumpTo = (id: string, tries = 6) => {
+  const el = document.getElementById(id);
+  if (!el) {
+    if (tries > 0) setTimeout(() => jumpTo(id, tries - 1), 80);
+    return;
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (tries <= 0) return;
+  setTimeout(() => {
+    if (Math.abs(el.getBoundingClientRect().top - NAV_OFFSET) > 160) jumpTo(id, tries - 1);
+  }, 400);
 };
 
 export function A({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
+  const cut = href.indexOf('#');
+  const path = cut === -1 ? href : href.slice(0, cut);
+  const anchor = cut === -1 ? '' : href.slice(cut + 1);
   return (
     <a
-      href={`#${href}`}
+      href={`#${path}${anchor ? `#${anchor}` : ''}`}
       className={className}
-      onClick={() => {
-        window.scrollTo({ top: 0 });
+      onClick={(e) => {
+        if (!anchor) {
+          window.scrollTo({ top: 0 });
+          return;
+        }
+        e.preventDefault();
+        const route = `#${path}#${anchor}`;
+        // Скроллим после перехода по хэшу: иначе браузер отменяет начатый прокруткой ход.
+        if (window.location.hash === route) jumpTo(anchor);
+        else {
+          window.addEventListener('hashchange', () => jumpTo(anchor), { once: true });
+          window.location.hash = route;
+        }
       }}
     >
       {children}
