@@ -31,7 +31,7 @@ export interface Space {
   id: SpaceId;
   name: string;
   kind: SpaceKind;
-  /** Стоимость покупки / база для начислений */
+  /** Цена покупки / база для платы по карте */
   price: number;
   /** Позиция в кольцевой сетке 6x6 (1..6) */
   col: number;
@@ -84,14 +84,14 @@ export interface LogEntry {
 }
 
 export interface PendingCard {
-  /** Кто получает карту (тот выбирает тир и платит) */
+  /** Кто получает карту (тот выбирает уровень и платит) */
   playerId: 0 | 1;
-  /** Владелец локации, которому платят */
+  /** Владелец улицы, которому платят */
   ownerId: 0 | 1 | null;
   spaceId: SpaceId;
-  /** Начисления умножаются (финальная глава) */
+  /** Плата умножается в финальной главе */
   multiplier: number;
-  /** Карта выдана как следствие покупки */
+  /** Карта выпала сразу после покупки улицы */
   fromPurchase: boolean;
 }
 
@@ -111,7 +111,7 @@ export interface GameState {
   log: LogEntry[];
   logSeq: number;
   seed: number;
-  winner: { greedy: 0 | 1; passionate: 0 | 1 } | null;
+  winner: { greedy: 0 | 1 | null; passionate: 0 | 1 | null } | null;
 }
 
 export type Action =

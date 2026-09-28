@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { BOARD } from '../game/board';
-import { TIERS, canPayOff, chargeFor, netWorth, payoffCost, taskOf } from '../game/engine';
+import { TIERS, canPayOff, chargeFor, count, heatLabel, netWorth, payoffCost, taskOf } from '../game/engine';
 import { chapterAt, CURRENCY, moodName } from '../game/story';
 import { normCode, type Role } from '../net/protocol';
 import { useGame, useMoveTimers, type NetParams, type SessionConfig } from '../net/useGame';
@@ -78,7 +78,10 @@ function TurnPanel({
       <div className="panel">
         <p className="eyebrow">Глава закрыта</p>
         <p className="muted" style={{ fontSize: 14 }}>
-          Перерыв: обсудите, кто кем был в этой главе. Дальше начисления вырастут.
+          Перерыв: обсудите, кто кем был в этой главе.{' '}
+          {state.chapter + 1 === state.totalChapters
+            ? 'Дальше все платы двойные.'
+            : 'Дальше — новая завязка и новые псевдонимы.'}
         </p>
         <button className="btn btn--primary btn--block" style={{ marginTop: 14 }} onClick={() => dispatch({ type: 'enter-chapter' })}>
           Следующая глава
@@ -93,7 +96,7 @@ function TurnPanel({
         Ожидайте… ход {player.name}
       </p>
       <p style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginTop: 6 }}>
-        {state.phase === 'buy' ? 'Локация свободна' : state.phase === 'resolve' ? 'Откройте карту' : 'Сюрприз из сюжета'}
+        {state.phase === 'buy' ? 'Улица свободна' : state.phase === 'resolve' ? 'Откройте карту' : 'Сюрприз из сюжета'}
       </p>
     </div>
   );
@@ -141,11 +144,11 @@ function Overlays({
     const space = BOARD[player.pos];
     return (
       <Modal locked={locked}>
-        <p className="eyebrow">Свободная локация</p>
+        <p className="eyebrow">Свободная улица</p>
         <h2 className="h2" style={{ fontSize: 28 }}>{space.name}</h2>
         <p className="lead" style={{ marginTop: 6 }}>
           Выкуп за {space.price} {CURRENCY}. Партнёр сразу тянет карту этой улицы: сам выбирает
-          уровень смелости и платит вам начисления.
+          уровень смелости и платит вам.
         </p>
         <div className="row" style={{ marginTop: 22, flexWrap: 'wrap' }}>
           <button className="btn btn--primary" onClick={() => dispatch({ type: 'buy' })} disabled={player.coins < space.price}>
@@ -178,10 +181,10 @@ function Overlays({
             ? `Карту тянет: ${payer.name} (${payer.alias}). Фишку не двигаем — улицу только что выкупили.`
             : `Ходит: ${payer.name} (${payer.alias}).`}{' '}
           {pending.ownerId !== null &&
-            `Владелец улицы: ${state.players[pending.ownerId].name} — начисления уходят владельцу.`}
+            `Владелец улицы: ${state.players[pending.ownerId].name} — плата уходит владельцу.`}
         </p>
         <p className="muted" style={{ fontSize: 13.5, marginTop: 8 }}>
-          Чем смелее уровень, тем меньше монет и больше жара.
+          Чем смелее уровень, тем меньше плата и тем быстрее растёт жар.
         </p>
         <div style={{ marginTop: 18 }}>
           {(['base', 'tease', 'bold'] as Tier[]).map((t) => {
@@ -198,7 +201,7 @@ function Overlays({
                   {TIERS[t].label}
                   <span className="tier__cost">
                     {cost} {CURRENCY}
-                    {TIERS[t].heat ? ` · +${TIERS[t].heat} жара` : ''}
+                    {TIERS[t].heat ? ` · +${heatLabel(TIERS[t].heat)}` : ''}
                   </span>
                 </span>
                 <span className="tier__text">{taskOf(state.mood, pending.spaceId, t)}</span>
@@ -229,9 +232,9 @@ function Overlays({
           {state.fate.money
             ? `${state.fate.money > 0 ? '+' : ''}${state.fate.money} ${CURRENCY}`
             : state.fate.heat
-              ? `+${state.fate.heat} жара`
+              ? `+${heatLabel(state.fate.heat)}`
               : state.fate.move
-                ? `Сдвиг на ${state.fate.move > 0 ? '+' : ''}${state.fate.move} полей`
+                ? `Сдвиг на ${state.fate.move > 0 ? '+' : ''}${count(state.fate.move, 'поле', 'поля', 'полей')}`
                 : 'Без последствий — просто сюжет.'}
         </p>
         <button className="btn btn--primary btn--block" style={{ marginTop: 22 }} onClick={() => dispatch({ type: 'take-fate' })}>
@@ -243,12 +246,20 @@ function Overlays({
 
   if (state.phase === 'gameover') {
     const [a, b] = state.players;
-    const both = state.winner && state.winner.greedy === state.winner.passionate;
+    const w = state.winner!;
+    const nameOf = (id: 0 | 1 | null) => (id === null ? 'Ничья' : id === 0 ? a.name : b.name);
+    const both = w.greedy !== null && w.greedy === w.passionate;
+    const noCrowns = w.greedy === null && w.passionate === null;
+    const greedyPlayer = w.greedy === null ? null : w.greedy === 0 ? a : b;
     return (
       <Modal>
         <p className="eyebrow">Финал</p>
         <h2 className="h2" style={{ fontSize: 30 }}>
-          {both ? `${(state.winner!.greedy === 0 ? a : b).name} берёт обе короны` : 'Короны розданы'}
+          {both
+            ? `${nameOf(w.greedy)} берёт обе короны`
+            : noCrowns
+              ? 'Ровная ничья: короны не разыграны'
+              : 'Короны розданы'}
         </h2>
         <p className="lead" style={{ marginTop: 4 }}>
           Вечер окончен. Капитал против жара — как и договаривались.
@@ -256,17 +267,18 @@ function Overlays({
         <div className="crowns" style={{ marginTop: 22 }}>
           <div className="crown">
             <p className="eyebrow" style={{ marginBottom: 4 }}>Корона Жадности</p>
-            <p className="crown__who">{state.winner!.greedy === 0 ? a.name : b.name}</p>
+            <p className="crown__who">{nameOf(w.greedy)}</p>
             <p className="muted" style={{ fontSize: 14 }}>
-              капитал {Math.max(netWorth(a), netWorth(b))} · локаций{' '}
-              {state.winner!.greedy === 0 ? a.owned.length : b.owned.length}
+              {greedyPlayer
+                ? `капитал ${netWorth(greedyPlayer)} · ${count(greedyPlayer.owned.length, 'улица', 'улицы', 'улиц')}`
+                : `капитал равный: ${netWorth(a)}`}
             </p>
           </div>
           <div className="crown crown--heat">
             <p className="eyebrow" style={{ marginBottom: 4 }}>Корона Страсти</p>
-            <p className="crown__who">{state.winner!.passionate === 0 ? a.name : b.name}</p>
+            <p className="crown__who">{nameOf(w.passionate)}</p>
             <p className="muted" style={{ fontSize: 14 }}>
-              жар {Math.max(a.heat, b.heat)}
+              {w.passionate === null ? `жар равный: ${a.heat}` : `жар ${Math.max(a.heat, b.heat)}`}
             </p>
           </div>
         </div>
@@ -275,7 +287,7 @@ function Overlays({
             <div className="spread" key={p.id} style={{ padding: '6px 0', fontSize: 14 }}>
               <span>{p.name} · {p.alias}</span>
               <span className="mono muted">
-                {p.coins} монет + {netWorth(p) - p.coins} в локациях · {p.heat} жара
+                {p.coins} монет + {netWorth(p) - p.coins} в улицах · жар {p.heat}
               </span>
             </div>
           ))}
@@ -300,7 +312,7 @@ function ChatPanel({ chat, say }: { chat: { id: number; from: 'me' | 'peer'; tex
   return (
     <div className="panel">
       <p className="eyebrow" style={{ marginBottom: 10 }}>
-        Письмами
+        Переписка
       </p>
       <div className="chat">
         {chat.length === 0 ? (
@@ -380,7 +392,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <span className="pill">{moodName(state.mood)}</span>
             <span className="pill">
-              {chapter.title.replace(/^Глава \d+\.\s*/, '')} · осталось ходов: {state.roundsLeftInChapter}
+              {chapter.title} · осталось {count(state.roundsLeftInChapter, 'ход', 'хода', 'ходов')}
             </span>
             {net && (
               <span className="pill">
@@ -390,7 +402,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
               </span>
             )}
             <button className="pill" onClick={onExit}>
-              Новая партия
+              Новый вечер
             </button>
           </div>
         </div>
@@ -405,7 +417,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
               rolling={state.phase === 'moving'}
               onArrive={onArrive}
               zoom
-              hint="покрути поле"
+              hint="покрутите поле"
               brand="ЧМОК"
               overlay={
                 <div className="board3d__overlay">
@@ -454,7 +466,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
                 <span>
                   <span className="player__name">{p.name}</span>
                   <span className="player__alias" style={{ display: 'block' }}>
-                    {p.alias} · {p.owned.length} улиц
+                    {p.alias} · {count(p.owned.length, 'улица', 'улицы', 'улиц')}
                     {net && p.id === me ? ' · вы' : ''}
                   </span>
                 </span>
@@ -501,15 +513,15 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
           {room.kind === 'bc' ? 'Локальная комната' : 'Онлайн'} · {net?.room}
         </p>
         <h1 className="h2" style={{ fontSize: 30 }}>
-          {room.status === 'open' ? 'Ждём первый ход хоста' : 'Соединяемся с комнатой'}
+          {room.status === 'open' ? 'Ждём, пока партнёр начнёт вечер' : 'Соединяемся с комнатой'}
         </h1>
         <p className="muted" style={{ marginTop: 10 }}>
           {room.status === 'closed'
             ? 'Связи нет — пробуем снова. Проверьте, что партнёр держит свою вкладку открытой.'
-            : 'Хост выбирает настроение и начинает главу — поле появится у вас само.'}
+            : 'Партнёр выбирает настроение и начинает первую главу — поле появится у вас само.'}
         </p>
         <div className="row" style={{ justifyContent: 'center', gap: 10, marginTop: 20 }}>
-          <span className="pill">{room.peerPresent ? 'партнёр на связи' : 'ждём вторых'}</span>
+          <span className="pill">{room.peerPresent ? 'партнёр на связи' : 'ждём партнёра'}</span>
           <button className="btn btn--ghost" onClick={onExit}>
             Выйти
           </button>

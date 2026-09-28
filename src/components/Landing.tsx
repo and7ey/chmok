@@ -56,7 +56,7 @@ function SampleCard() {
         </span>
       </div>
       <p className="muted" style={{ marginTop: 16, fontSize: 14 }}>
-        Это был всего один ход. На поле их двадцать.
+        Это была всего одна улица. На поле их семнадцать.
       </p>
     </div>
   );
@@ -82,7 +82,7 @@ function BoardExplorer() {
             selectedId={selected}
             interactive
             onSelect={setSelected}
-            hint="кликни по улице"
+            hint="нажмите на улицу"
             brand={SITE.brand}
             overlay={
               <div className="board3d__overlay">
@@ -132,7 +132,7 @@ function BoardExplorer() {
       </div>
 
       <div className="card card--pad">
-        <p className="eyebrow">Задания локации</p>
+        <p className="eyebrow">Задания улицы</p>
         <h3 className="h3" style={{ marginBottom: 14 }}>
           {space.name}
         </h3>
@@ -182,7 +182,7 @@ export function Landing() {
       <main>
         <section className="wrap hero">
           <div>
-            <p className="eyebrow">Настольная игра на двоих · 18+</p>
+            <p className="eyebrow">Настольная игра для взрослых · 18+</p>
             <h1 className="h-display">{SITE.hero.h1}</h1>
             <p className="hero__sub">{SITE.hero.sub}</p>
             <div className="hero__cta">
@@ -263,6 +263,10 @@ export function Landing() {
         <section className="wrap section" id="moods">
           <p className="eyebrow">Настроения</p>
           <h2 className="h2">Одно поле, три вечера</h2>
+          <p className="lead" style={{ marginBottom: 30 }}>
+            Настроение — это колода заданий на весь вечер: оно меняет тон и смелость карт, но не
+            правила. Выбираете одну из трёх колод и играете вечер до конца.
+          </p>
           <div className="moods" style={{ marginTop: 30 }}>
             {MOOD_CARDS.map((m) => (
               <div className={`mood mood--${m.id}`} key={m.id}>
@@ -283,10 +287,10 @@ export function Landing() {
 
         <section className="wrap section" id="board">
           <p className="eyebrow">Поле</p>
-          <h2 className="h2">Девятнадцать улиц и два сюрприза</h2>
+          <h2 className="h2">Семнадцать улиц и два сюрприза</h2>
           <p className="lead" style={{ marginBottom: 30 }}>
-            Цены растут от Открыточного переулка к Полуночному особняку. Каждые четыре-пять улиц —
-            «Сюрприз»: он меняет деньги, жар или место на поле.
+            Цены растут от Открыточного переулка к Полуночному особняку. Один «Сюрприз» стоит в начале
+            круга, второй — в конце: он меняет деньги, жар или место на поле.
           </p>
           <BoardExplorer />
           <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 26 }}>
@@ -304,15 +308,15 @@ export function Landing() {
               <p className="eyebrow">Механика</p>
               <h2 className="h2">Деньги против желания</h2>
               <p className="lead">
-                Каждая карта стоит монет — но чем смелее уровень, тем меньше вы платите и тем больше
-                получаете жара. Откупиться можно, если в кармане есть полтора цены улицы. Пустой
-                карман — значит придётся целоваться.
+                Каждая карта стоит монет — но чем смелее уровень, тем меньше вы платите и тем быстрее
+                растёт ваш жар. Откупиться можно за полторы цены улицы. Пустой карман — значит придётся
+                целоваться.
               </p>
               <ul style={{ marginTop: 20, display: 'grid', gap: 10 }}>
                 {[
                   'Старт с 1000 монет у каждого',
-                  'Выкупленная улица выдаёт партнёру карту',
-                  'Финальная глава удваивает начисления',
+                  'Выкупленная улица — партнёр тянет её карту',
+                  'Финальная глава удваивает все платы',
                   'Корона Жадности и Корона Страсти',
                 ].map((t) => (
                   <li key={t} className="row" style={{ gap: 10, color: 'var(--muted)' }}>

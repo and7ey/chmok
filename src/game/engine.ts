@@ -2,7 +2,7 @@ import { BOARD, SPACE_COUNT } from './board';
 import { DECK, FATE, START_COINS, PASS_START, HOME_BONUS, chapterAt } from './story';
 import type { Action, GameState, Mood, PendingCard, PlayerState, SpaceId, Tier } from './types';
 
-/** Цена карты относительно стоимости локации и тепло за смелость */
+/** Цена карты относительно цены улицы и жар за смелость */
 export const TIERS: Record<Tier, { label: string; factor: number; heat: number }> = {
   base: { label: 'База', factor: 1, heat: 0 },
   tease: { label: 'Дразнить', factor: 0.5, heat: 1 },
@@ -10,6 +10,13 @@ export const TIERS: Record<Tier, { label: string; factor: number; heat: number }
 };
 
 export const PAYOFF_FACTOR = 1.5;
+
+/** Числительное с существительным по-русски: 1 улица, 2 улицы, 5 улиц. */
+export const count = (n: number, one: string, few: string, many: string) =>
+  `${n} ${n % 100 >= 11 && n % 100 <= 14 ? many : n % 10 === 1 ? one : n % 10 >= 2 && n % 10 <= 4 ? few : many}`;
+
+/** Жар по-русски: 1 жар, 2 жара, 5 жаров. */
+export const heatLabel = (n: number) => count(n, 'жар', 'жара', 'жаров');
 
 const norm = (i: number) => ((i % SPACE_COUNT) + SPACE_COUNT) % SPACE_COUNT;
 
@@ -101,10 +108,11 @@ const multiplierFor = (state: GameState) => (state.chapter === state.totalChapte
 
 const endGame = (state: GameState) => {
   const [a, b] = state.players;
-  const greedy: 0 | 1 = netWorth(b) > netWorth(a) ? 1 : 0;
-  const passionate: 0 | 1 = b.heat > a.heat ? 1 : 0;
-  state.players[greedy].crown = 'greedy';
-  state.players[passionate].crown = 'passionate';
+  const tie = (x: number, y: number): 0 | 1 | null => (x === y ? null : x > y ? 0 : 1);
+  const greedy = tie(netWorth(a), netWorth(b));
+  const passionate = tie(a.heat, b.heat);
+  if (greedy !== null) state.players[greedy].crown = 'greedy';
+  if (passionate !== null) state.players[passionate].crown = 'passionate';
   state.winner = { greedy, passionate };
   state.phase = 'gameover';
   say(state, 'Занавес. Считаем короны.', 'story');
@@ -165,7 +173,7 @@ const land = (state: GameState, playerId: 0 | 1, depth = 0) => {
   }
 
   player.coins += PASS_START;
-  say(state, `${player.name} на «Свидание» — забирает ${PASS_START}.`, 'money');
+  say(state, `${player.name} проходит «Свидание» и забирает ${PASS_START}.`, 'money');
   finishTurn(state);
 };
 
@@ -186,7 +194,7 @@ export function reducer(state: GameState, action: Action): GameState {
     case 'start': {
       if (next.phase !== 'premise') return next;
       setAliases(next);
-      say(next, chapterAt(next.mood, 1).title, 'story');
+      say(next, `Глава ${next.chapter}: ${chapterAt(next.mood, next.chapter).title}`, 'story');
       next.phase = 'awaiting-roll';
       return next;
     }
@@ -227,7 +235,7 @@ export function reducer(state: GameState, action: Action): GameState {
       const space = BOARD[buyer.pos];
       const paid = transfer(next, buyer.id, null, space.price);
       buyer.owned.push(space.id);
-      say(next, `${buyer.name} выкупает «${space.name}» за ${paid} и выдаёт партнёру карту.`, 'money');
+      say(next, `${buyer.name} выкупает «${space.name}» за ${paid}. Партнёр тянет её карту.`, 'money');
       next.pending = {
         playerId: other(buyer.id),
         ownerId: buyer.id,
@@ -253,11 +261,12 @@ export function reducer(state: GameState, action: Action): GameState {
       const tier = action.tier;
       const paid = transfer(next, payer.id, pending.ownerId, chargeFor(pending.spaceId, tier, pending.multiplier));
       payer.heat += TIERS[tier].heat;
+      const heatText = TIERS[tier].heat ? `, +${heatLabel(TIERS[tier].heat)}` : '';
       say(
         next,
-        `${payer.name} берёт «${TIERS[tier].label}» и платит ${paid}${
-          TIERS[tier].heat ? `, +${TIERS[tier].heat} жара` : ''
-        }.`,
+        paid
+          ? `${payer.name} берёт «${TIERS[tier].label}» и платит ${paid}${heatText}.`
+          : `${payer.name} берёт «${TIERS[tier].label}» — монет нет, выполняет без платы${heatText}.`,
         TIERS[tier].heat ? 'heat' : 'money',
       );
       say(next, `Задание: ${taskOf(next.mood, pending.spaceId, tier)}`, 'story');
@@ -284,10 +293,13 @@ export function reducer(state: GameState, action: Action): GameState {
         say(next, `${card.text} (${card.money > 0 ? '+' : ''}${card.money} монет)`, 'money');
       } else if (card.heat) {
         player.heat += card.heat;
-        say(next, `${card.text} (+${card.heat} жара)`, 'heat');
+        say(next, `${card.text} (+${heatLabel(card.heat)})`, 'heat');
       } else if (card.move) {
         player.pos = norm(player.pos + card.move);
-        say(next, `${card.text} (${card.move > 0 ? '+' : ''}${card.move} полей)`);
+        say(
+          next,
+          `${card.text} (${card.move > 0 ? '+' : ''}${count(card.move, 'поле', 'поля', 'полей')})`,
+        );
         land(next, player.id, 1);
         return next;
       } else {
@@ -302,9 +314,8 @@ export function reducer(state: GameState, action: Action): GameState {
       next.chapter += 1;
       next.roundsLeftInChapter = next.roundsPerChapter;
       next.current = other(next.current);
-      setAliases(next);
-      say(next, chapterAt(next.mood, next.chapter).title, 'story');
-      next.phase = 'awaiting-roll';
+      // Завязка новой главы — тот же экран, что и в начале вечера.
+      next.phase = 'premise';
       return next;
     }
 

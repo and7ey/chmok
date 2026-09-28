@@ -68,12 +68,12 @@ export function Setup({
   if (players === 'one') {
     return (
       <div className="card card--pad">
-        <p className="eyebrow">Настройте вечер</p>
+        <p className="eyebrow">Настройки</p>
         <h1 className="h2" style={{ fontSize: 28 }}>
-          Хост выбирает
+          Настройте вечер
         </h1>
         <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
-          Имя партнёра придёт от него самого, как только он откроет ссылку.
+          Партнёр назовётся сам, когда откроет ссылку.
         </p>
         <div style={{ marginTop: 16 }}>
           <Field id="myname" label="Как вас зовут" value={name} onChange={setName} placeholder="Имя для поля" maxLength={16} />
@@ -89,7 +89,7 @@ export function Setup({
             onBegin(mood, [name.trim(), ''], rounds);
           }}
         >
-          {waiting ? 'Все ещё ждём партнёра' : `Начать главу 1 за ${rounds} ходов`}
+          {waiting ? 'Все ещё ждём партнёра' : 'Начать первую главу'}
         </button>
       </div>
     );
@@ -97,7 +97,7 @@ export function Setup({
 
   return (
     <div className="card card--pad" style={{ maxWidth: 640, margin: '0 auto' }}>
-      <p className="eyebrow">Новая партия</p>
+      <p className="eyebrow">Новая игра</p>
       <h1 className="h2" style={{ fontSize: 34 }}>
         Настройте вечер
       </h1>
@@ -114,7 +114,7 @@ export function Setup({
         style={{ marginTop: 22 }}
         onClick={() => onBegin(mood, [a, b], rounds)}
       >
-        Начать главу 1
+        Начать первую главу
       </button>
       <p className="muted" style={{ fontSize: 12.5, marginTop: 12, textAlign: 'center' }}>
         Игра идёт на этом устройстве, ничего не отправляется.
@@ -158,8 +158,8 @@ function LengthPicker({ rounds, onPick }: { rounds: number; onPick: (r: number) 
 }
 
 const MODES: { id: 'solo' | 'host' | 'guest'; h: string; p: string }[] = [
-  { id: 'solo', h: 'Вдвоём за экраном', p: 'Обычная вечерняя партия: один телефон или ноутбук, ходите по очереди.' },
-  { id: 'host', h: 'Создать комнату', p: 'Вы хост. Отправьте партнёру ссылку — у каждого будет своё поле.' },
+  { id: 'solo', h: 'Вдвоём за экраном', p: 'Один телефон или ноутбук на двоих: ходите по очереди.' },
+  { id: 'host', h: 'Создать комнату', p: 'Отправьте партнёру ссылку — у каждого будет своё поле.' },
   { id: 'guest', h: 'Войти по ссылке или коду', p: 'Партнёр уже ждёт — открывайте ссылку или вставьте код.' },
 ];
 
@@ -171,7 +171,7 @@ export function Menu({ onPick }: { onPick: (mode: 'solo' | 'host' | 'guest') => 
         <div className="card card--pad" style={{ maxWidth: 640, margin: '0 auto' }}>
           <p className="eyebrow">Играем</p>
           <h1 className="h2" style={{ fontSize: 32 }}>
-            Выберите, как садитесь
+            Выберите, как играете
           </h1>
           <p className="muted" style={{ fontSize: 13.5, marginTop: 8 }}>
             {transportKind() === 'bc'
@@ -304,6 +304,10 @@ export function HostLobbyScreen({
             </div>
             <p className="muted mono" style={{ fontSize: 12, marginTop: 10, overflowWrap: 'anywhere' }}>
               {link}
+            </p>
+            <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+              Отправьте ссылку партнёру или откройте её на втором устройстве. Как только он появится,
+              настраивайте вечер ниже и начинайте.
             </p>
           </div>
 

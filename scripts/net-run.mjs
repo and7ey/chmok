@@ -187,7 +187,7 @@ if (process.env.SOLO) {
   await solo.waitJs("!!document.querySelector('#p1')");
   await solo.type('#p1', 'Аня');
   await solo.type('#p2', 'Витя');
-  await solo.clickText('Начать главу 1');
+  await solo.clickText('Начать первую главу');
   await solo.waitJs("!!document.querySelector('.log')");
   const pressed = new Set();
   for (let i = 0; i < 70; i++) {
@@ -228,7 +228,7 @@ await host_.waitHas('в комнате', 60000);
 log('host sees peer:', (await host_.text()).match(/[^\n]*в комнате[^\n]*/)?.[0]);
 
 await host_.type('#myname', 'Андрей');
-await host_.clickText('Начать главу 1');
+await host_.clickText('Начать первую главу');
 await host_.waitJs("!!document.querySelector('.log')");
 log('host in game');
 
