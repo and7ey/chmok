@@ -91,6 +91,10 @@ export type TileState = 'idle' | 'current' | 'selected';
 export function tileFace(space: Space, owner: 0 | 1 | null, state: TileState) {
   const { el, ctx } = canvas2d(256, 256);
 
+  // Плитка лежит поверх тела поля: без этой подложки прозрачные углы текстуры дают чёрную рамку.
+  ctx.fillStyle = state === 'idle' ? '#f2e0bd' : '#fff3d8';
+  ctx.fillRect(0, 0, 256, 256);
+
   const bg = ctx.createLinearGradient(0, 0, 0, 256);
   if (space.kind === 'start') {
     bg.addColorStop(0, '#ffd7e6');
@@ -156,8 +160,11 @@ export function signFace(text: string) {
   bg.addColorStop(0, '#ff4d8d');
   bg.addColorStop(1, '#ff8fb0');
   ctx.fillStyle = bg;
-  rr(ctx, 8, 8, 496, 176, 84);
-  ctx.fill();
+  ctx.fillRect(0, 0, 512, 192);
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 9;
+  rr(ctx, 15, 15, 482, 162, 78);
+  ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.font = '700 92px Fredoka, Inter, Arial, sans-serif';
@@ -229,8 +236,7 @@ export function diceFace(value: number) {
   bg.addColorStop(0, '#fffdfa');
   bg.addColorStop(1, '#efe2cc');
   ctx.fillStyle = bg;
-  rr(ctx, 4, 4, 120, 120, 26);
-  ctx.fill();
+  ctx.fillRect(0, 0, 128, 128);
   ctx.fillStyle = '#ff4d8d';
   for (const [px, py] of PIPS[value]) {
     ctx.beginPath();

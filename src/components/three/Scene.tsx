@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import { BOARD, SPACE_COUNT } from '../../game/board';
 import type { PlayerState, Space, SpaceId } from '../../game/types';
-import { BOARD_W, CELL_XZ, OWNER_COLOR, TILE, ringPoint } from './layout';
+import { BOARD_W, CELL_XZ, OWNER_COLOR, TILE, TILE_TOP, ringPoint } from './layout';
 import { ARRIVE_BEAT_MS, DICE_ROLL_MS, WALK_STEP_MS } from './capabilities';
 import { checker, diceFace, signFace, stripes, tileFace, toTexture } from './textures';
 
@@ -18,6 +18,9 @@ function useTex(make: () => HTMLCanvasElement, deps: unknown[]) {
 }
 
 const damp = THREE.MathUtils.damp;
+
+/** На столько плитка приподнимается под текущим ходом — фишка должна ехать вместе с ней. */
+const TILE_LIFT = 0.12;
 
 /* ---------------------------------- поле --------------------------------- */
 
@@ -41,7 +44,7 @@ function BoardBase() {
         position={[0, -0.53, 0]}
         castShadow
       >
-        <meshStandardMaterial color="#2a1230" roughness={0.55} metalness={0.2} />
+        <meshStandardMaterial color="#3d1c46" roughness={0.55} metalness={0.2} />
       </RoundedBox>
     </group>
   );
@@ -56,7 +59,7 @@ function House({ color }: { color: string }) {
       </mesh>
       <mesh castShadow position={[0, 0.26, 0]} rotation={[0, Math.PI / 4, 0]}>
         <coneGeometry args={[0.21, 0.15, 4]} />
-        <meshStandardMaterial color="#2b1233" roughness={0.7} />
+        <meshStandardMaterial color="#e2604a" roughness={0.7} />
       </mesh>
     </group>
   );
@@ -85,7 +88,7 @@ function Tile({
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
-    g.position.y = damp(g.position.y, state === 'idle' ? (hover ? 0.05 : 0) : 0.12, 9, dt);
+    g.position.y = damp(g.position.y, state === 'idle' ? (hover ? 0.05 : 0) : TILE_LIFT, 9, dt);
   });
 
   useEffect(() => {
@@ -193,7 +196,7 @@ function Cabana({ position }: { position: V3 }) {
       </mesh>
       <mesh position={[0, 0.26, 0.405]}>
         <planeGeometry args={[0.4, 0.44]} />
-        <meshStandardMaterial color="#2b1233" roughness={0.95} />
+        <meshStandardMaterial color="#a5683c" roughness={0.9} />
       </mesh>
     </group>
   );
@@ -266,7 +269,7 @@ function Sign({ text }: { text: string }) {
       {[-0.92, 0.92].map((x) => (
         <mesh key={x} castShadow position={[x, 0.32, 0]}>
           <cylinderGeometry args={[0.05, 0.05, 0.66, 8]} />
-          <meshStandardMaterial color="#2b1233" roughness={0.7} />
+          <meshStandardMaterial color="#8a5a34" roughness={0.8} />
         </mesh>
       ))}
     </group>
@@ -306,17 +309,20 @@ function Pawn({
   pos,
   color,
   offset,
+  lift = 0,
   onSettled,
 }: {
   pos: number;
   color: string;
   offset: number;
+  lift?: number;
   onSettled?: () => void;
 }) {
   const group = useRef<THREE.Group>(null);
   const current = useRef(pos);
   const remain = useRef(0);
   const walking = useRef(false);
+  const height = useRef(TILE_TOP);
 
   useEffect(() => {
     const shown = ((current.current % SPACE_COUNT) + SPACE_COUNT) % SPACE_COUNT;
@@ -339,14 +345,16 @@ function Pawn({
     }
     const idx = ((current.current % SPACE_COUNT) + SPACE_COUNT) % SPACE_COUNT;
     const [x, z] = ringPoint(idx);
-    g.position.set(x + offset, remain.current > 0.001 ? Math.abs(Math.sin(idx * Math.PI)) * 0.16 : 0, z);
+    const hop = remain.current > 0.001 ? Math.abs(Math.sin(idx * Math.PI)) * 0.16 : 0;
+    height.current = damp(height.current, TILE_TOP + lift + hop, 10, dt);
+    g.position.set(x + offset, height.current, z);
   });
 
   return (
     <group ref={group}>
       <mesh castShadow position={[0, 0.03, 0]}>
         <cylinderGeometry args={[0.24, 0.27, 0.06, 16]} />
-        <meshStandardMaterial color="#2b1233" roughness={0.6} />
+        <meshStandardMaterial color="#4b2454" roughness={0.6} />
       </mesh>
       <mesh castShadow position={[0, 0.28, 0]}>
         <cylinderGeometry args={[0.1, 0.2, 0.44, 14]} />
@@ -362,9 +370,11 @@ function Pawn({
 
 function Tokens({
   players,
+  liftedIndex,
   onArrive,
 }: {
   players: [PlayerState, PlayerState];
+  liftedIndex?: number;
   onArrive?: () => void;
 }) {
   return (
@@ -375,6 +385,7 @@ function Tokens({
           pos={p.pos}
           color={OWNER_COLOR[p.id]}
           offset={p.id === 0 ? -0.3 : 0.3}
+          lift={liftedIndex === p.pos ? TILE_LIFT : 0}
           onSettled={onArrive}
         />
       ))}
@@ -469,6 +480,44 @@ function Dice({ dice, rolling }: { dice: [number, number] | null; rolling: boole
   );
 }
 
+/* --------------------------------- камера -------------------------------- */
+
+const HOME_TARGET: V3 = [0, -0.4, 0];
+/** Стартовая дистанция обзора: [0, 9.4, 14.6] относительно HOME_TARGET. */
+const HOME_DIST = 17.6;
+const CLOSE_DIST = 11.4;
+
+/**
+ * Пока летят кубики и фишка идёт по кольцу, наводим камеру на клетку прибытия
+ * и чуть подводимся, чтобы итоговая клетка была крупно в кадре.
+ */
+function CameraRig({ focus }: { focus: number | null }) {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as unknown as {
+    target: THREE.Vector3;
+    update: () => void;
+  } | null;
+  const offset = useMemo(() => new THREE.Vector3(), []);
+
+  useFrame((_, dt) => {
+    if (!controls) return;
+    const close = focus !== null;
+    const idx = (((focus ?? 0) % SPACE_COUNT) + SPACE_COUNT) % SPACE_COUNT;
+    const [x, z] = CELL_XZ[idx];
+    const want: V3 = close ? [x, TILE_TOP + 0.1, z] : HOME_TARGET;
+    const k = 3.6;
+    controls.target.x = damp(controls.target.x, want[0], k, dt);
+    controls.target.y = damp(controls.target.y, want[1], k, dt);
+    controls.target.z = damp(controls.target.z, want[2], k, dt);
+    offset.copy(camera.position).sub(controls.target);
+    offset.setLength(damp(offset.length(), close ? CLOSE_DIST : HOME_DIST, k, dt));
+    camera.position.copy(controls.target).add(offset);
+    controls.update();
+  });
+
+  return null;
+}
+
 /* -------------------------------- сцена --------------------------------- */
 
 export interface SceneProps {
@@ -480,6 +529,8 @@ export interface SceneProps {
   rolling?: boolean;
   /** Фишка дошла до клетки и кубики успокоились — можно открывать карточку. */
   onArrive?: () => void;
+  /** Показывать ли крупно клетку прибытия; undefined — камера целиком ваша (лендинг). */
+  focus?: number | null;
   interactive?: boolean;
   onSelect?: (id: SpaceId) => void;
   brand: string;
@@ -493,6 +544,7 @@ export function BoardScene({
   dice,
   rolling = false,
   onArrive,
+  focus,
   interactive,
   onSelect,
   brand,
@@ -551,8 +603,9 @@ export function BoardScene({
         />
       ))}
       <Hub brand={brand} />
-      {players && <Tokens players={players} onArrive={onArrive && handleArrive} />}
+      {players && <Tokens players={players} liftedIndex={currentIndex} onArrive={onArrive && handleArrive} />}
       {dice && <Dice dice={dice} rolling={rolling} />}
+      {focus === undefined ? null : <CameraRig focus={focus} />}
     </>
   );
 }

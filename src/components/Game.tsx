@@ -76,12 +76,12 @@ function TurnPanel({
   if (state.phase === 'chapter-break') {
     return (
       <div className="panel">
-        <p className="eyebrow">Глава закрыта</p>
+        <p className="eyebrow">Перерыв</p>
         <p className="muted" style={{ fontSize: 14 }}>
-          Перерыв: обсудите, кто кем был в этой главе.{' '}
+          Глава закончилась.{' '}
           {state.chapter + 1 === state.totalChapters
-            ? 'Дальше все платы двойные.'
-            : 'Дальше — новая завязка и новые псевдонимы.'}
+            ? 'Следующая — последняя: все платы по ней двойные.'
+            : 'Следующая начнётся с новой завязки и новых псевдонимов.'}
         </p>
         <button className="btn btn--primary btn--block" style={{ marginTop: 14 }} onClick={() => dispatch({ type: 'enter-chapter' })}>
           Следующая глава
@@ -147,8 +147,7 @@ function Overlays({
         <p className="eyebrow">Свободная улица</p>
         <h2 className="h2" style={{ fontSize: 28 }}>{space.name}</h2>
         <p className="lead" style={{ marginTop: 6 }}>
-          Выкуп за {space.price} {CURRENCY}. Партнёр сразу тянет карту этой улицы: сам выбирает
-          уровень смелости и платит вам.
+          Выкуп за {space.price} {CURRENCY}.
         </p>
         <div className="row" style={{ marginTop: 22, flexWrap: 'wrap' }}>
           <button className="btn btn--primary" onClick={() => dispatch({ type: 'buy' })} disabled={player.coins < space.price}>
@@ -172,16 +171,14 @@ function Overlays({
     return (
       <Modal locked={locked}>
         <p className="eyebrow">
-          {pending.fromPurchase ? 'Карта за покупку' : 'Карта улицы'} · {moodName(state.mood)}
+          {pending.fromPurchase ? 'Выкупленная улица' : 'Чужая улица'} · {moodName(state.mood)}
           {pending.multiplier > 1 ? ' · финальная глава ×2' : ''}
         </p>
         <h2 className="h2" style={{ fontSize: 28 }}>{space.name}</h2>
         <p className="muted" style={{ marginTop: 4 }}>
-          {pending.fromPurchase
-            ? `Карту тянет: ${payer.name} (${payer.alias}). Фишку не двигаем — улицу только что выкупили.`
-            : `Ходит: ${payer.name} (${payer.alias}).`}{' '}
+          {payer.name} ({payer.alias}) выполняет задание.
           {pending.ownerId !== null &&
-            `Владелец улицы: ${state.players[pending.ownerId].name} — плата уходит владельцу.`}
+            ` Владелец улицы (${state.players[pending.ownerId].name}) получит монеты.`}
         </p>
         <p className="muted" style={{ fontSize: 13.5, marginTop: 8 }}>
           Чем смелее уровень, тем меньше плата и тем быстрее растёт жар.
@@ -262,7 +259,7 @@ function Overlays({
               : 'Короны розданы'}
         </h2>
         <p className="lead" style={{ marginTop: 4 }}>
-          Вечер окончен. Капитал против жара — как и договаривались.
+          Вечер окончен. Монеты против жара — как и договаривались.
         </p>
         <div className="crowns" style={{ marginTop: 22 }}>
           <div className="crown">
@@ -270,8 +267,8 @@ function Overlays({
             <p className="crown__who">{nameOf(w.greedy)}</p>
             <p className="muted" style={{ fontSize: 14 }}>
               {greedyPlayer
-                ? `капитал ${netWorth(greedyPlayer)} · ${count(greedyPlayer.owned.length, 'улица', 'улицы', 'улиц')}`
-                : `капитал равный: ${netWorth(a)}`}
+                ? `${netWorth(greedyPlayer)} монет с учётом улиц · ${count(greedyPlayer.owned.length, 'улица', 'улицы', 'улиц')}`
+                : `С учётом улиц равны: ${netWorth(a)}`}
             </p>
           </div>
           <div className="crown crown--heat">
@@ -383,6 +380,13 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
     state.phase !== 'gameover';
 
   if (state && chapter && turn) {
+    /** Клетка крупным планом: во время броска предсказанная, после ходьбы — фактическая. */
+    const phase = state.phase;
+    const nearCell =
+      phase === 'moving' || phase === 'walking' || phase === 'buy' || phase === 'resolve' || phase === 'fate';
+    const focusCell = nearCell
+      ? (turn.pos + (phase === 'moving' && state.dice ? state.dice[0] + state.dice[1] : 0)) % BOARD.length
+      : null;
     return (
       <main className="wrap game">
         <div className="game__head">
@@ -413,6 +417,7 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
               players={state.players}
               owners={ownersOf(state)}
               currentIndex={turn.pos}
+              focus={focusCell}
               dice={state.dice}
               rolling={state.phase === 'moving'}
               onArrive={onArrive}
@@ -471,11 +476,8 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
                   </span>
                 </span>
                 <span className="player__stats">
-                  <span className="player__coins">{netWorth(p)}</span>
-                  <span className="muted" style={{ display: 'block', fontSize: 12 }}>
-                    капитал
-                  </span>
-                  <span className="stat--heat" style={{ fontSize: 13 }}>
+                  <span className="player__coins">◎ {p.coins}</span>
+                  <span className="stat--heat" style={{ display: 'block', fontSize: 13 }}>
                     ♥ {p.heat}
                   </span>
                 </span>

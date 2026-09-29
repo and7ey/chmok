@@ -16,6 +16,8 @@ const check = (s: GameState, where: string) => {
   if (both.length) throw new Error(`${where}: ${both[0]} owned by both`);
 };
 
+const crownName = (s: GameState, id: 0 | 1 | null) => (id === null ? 'tie' : s.players[id].name);
+
 const simulate = (mood: Mood, rounds: number) => {
   let s = makeInitial(mood, ['Аня', 'Борь'], rounds);
   let steps = 0;
@@ -85,8 +87,8 @@ const simulate = (mood: Mood, rounds: number) => {
     phases: [...seen].sort().join(','),
     p1: { coins: s.players[0].coins, net: netWorth(s.players[0]), heat: s.players[0].heat, owned: s.players[0].owned.length },
     p2: { coins: s.players[1].coins, net: netWorth(s.players[1]), heat: s.players[1].heat, owned: s.players[1].owned.length },
-    greedy: s.winner && s.players[s.winner.greedy].name,
-    passionate: s.winner && s.players[s.winner.passionate].name,
+    greedy: crownName(s, s.winner?.greedy ?? null),
+    passionate: crownName(s, s.winner?.passionate ?? null),
     log: s.log.length,
     tiers: Object.keys(TIERS).length,
   };

@@ -3,6 +3,8 @@ import { BOARD } from '../../game/board';
 export const GRID = 6;
 export const STEP = 1.5;
 export const TILE = 1.34;
+/** Верх плитки: на этой высоте стоят фишки, иначе они проваливаются в поле. */
+export const TILE_TOP = 0.17;
 export const BOARD_W = GRID * STEP + 0.9;
 /** Всё, что стоит в центре, не должно выходить за эту границу, иначе залезет на плитки. */
 export const HUB_LIMIT = 2.9;

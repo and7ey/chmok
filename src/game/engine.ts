@@ -235,7 +235,7 @@ export function reducer(state: GameState, action: Action): GameState {
       const space = BOARD[buyer.pos];
       const paid = transfer(next, buyer.id, null, space.price);
       buyer.owned.push(space.id);
-      say(next, `${buyer.name} выкупает «${space.name}» за ${paid}. Партнёр тянет её карту.`, 'money');
+      say(next, `${buyer.name} выкупает «${space.name}» за ${paid}. Задание выполняет ${next.players[other(buyer.id)].name}.`, 'money');
       next.pending = {
         playerId: other(buyer.id),
         ownerId: buyer.id,
@@ -298,7 +298,7 @@ export function reducer(state: GameState, action: Action): GameState {
         player.pos = norm(player.pos + card.move);
         say(
           next,
-          `${card.text} (${card.move > 0 ? '+' : ''}${count(card.move, 'поле', 'поля', 'полей')})`,
+          `${card.text} (${card.move > 0 ? '+' : '−'}${count(Math.abs(card.move), 'поле', 'поля', 'полей')})`,
         );
         land(next, player.id, 1);
         return next;

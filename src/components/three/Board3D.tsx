@@ -34,6 +34,9 @@ interface Props extends SceneProps {
   fallbackHub?: ReactNode;
 }
 
+/** Стабильная ссылка: иначе drei будет сбрасывать цель орбиты на каждый рендер и мешать камере-ригу. */
+const ORBIT_TARGET: [number, number, number] = [0, -0.4, 0];
+
 export function Board3D({ overlay, autoRotate = false, zoom = false, hint, fallbackHub, ...scene }: Props) {
   const fontsReady = useFontsReady();
   const [ok] = useState(hasWebGL);
@@ -74,13 +77,13 @@ export function Board3D({ overlay, autoRotate = false, zoom = false, hint, fallb
               enableDamping
               dampingFactor={0.08}
               rotateSpeed={0.45}
-              minDistance={11}
+              minDistance={9}
               maxDistance={24}
               minPolarAngle={0.5}
               maxPolarAngle={1.32}
               autoRotate={autoRotate && !reduced}
               autoRotateSpeed={0.45}
-              target={[0, -0.4, 0]}
+              target={ORBIT_TARGET}
             />
           </Suspense>
         </Canvas>
