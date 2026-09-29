@@ -77,7 +77,7 @@ export function Board3D({ overlay, autoRotate = false, zoom = false, hint, fallb
               enableDamping
               dampingFactor={0.08}
               rotateSpeed={0.45}
-              minDistance={9}
+              minDistance={6}
               maxDistance={24}
               minPolarAngle={0.5}
               maxPolarAngle={1.32}

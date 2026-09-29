@@ -26,6 +26,10 @@ const pending = new Map();
 let seq = 0;
 conn.addEventListener('message', (e) => {
   const m = JSON.parse(e.data);
+  if (m.method === 'Page.screencastFrame') {
+    if (casting) frames.push(m.params.data);
+    conn.send(JSON.stringify({ id: ++seq, method: 'Page.screencastFrameAck', params: { sessionId: m.params.sessionId } }));
+  }
   if (m.id && pending.has(m.id)) {
     const { resolve, reject } = pending.get(m.id);
     pending.delete(m.id);
@@ -43,6 +47,29 @@ await new Promise((r) => conn.addEventListener('open', r));
 const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
 const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true }, undefined);
 const call = (method, params) => send(method, params, sessionId);
+
+/**
+ * Отсчёт кадров через screencast: captureScreenshot в headless идёт секунды
+ * и для шага в 185 мс слепой — а так видно всю анимацию целиком.
+ */
+const frames = [];
+let casting = false;
+const castStart = async () => {
+  frames.length = 0;
+  casting = true;
+  await call('Page.startScreencast', { format: 'jpeg', quality: 60, maxWidth: 1000, everyNthFrame: 2 });
+};
+const castStop = async (tag, keep = 12) => {
+  casting = false;
+  await call('Page.stopScreencast');
+  const step = Math.max(1, Math.floor(frames.length / keep));
+  const picked = frames.filter((_, i) => i % step === 0).slice(0, keep);
+  picked.forEach((f, i) =>
+    writeFileSync(`${OUT}cast-${tag}-${String(i).padStart(2, '0')}.jpg`, Buffer.from(f, 'base64')),
+  );
+  console.log(`касты ${tag}: кадров ${frames.length}, сохранено ${picked.length}`);
+};
+
 const js = async (expression) => {
   const out = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
   return out.result?.value;
@@ -101,11 +128,16 @@ const waitChip = async (re, ms = 9000) => {
   return 'ТАЙМАУТ';
 };
 
+await castStart();
 console.log('бросок:', await click('.panel', 'Бросить кубики'));
 console.log('чип:', await waitChip('прыгают'));
 await shot('04-dice', '.board3d');
-console.log('чип:', await waitChip('='));
-await wait(1500);
+/** Screencast в headless отдаёт единицы кадров — снимаем ход серии PNG: сам снимок идёт ~1 с, этого хватает на фазы. */
+for (let i = 0; i < 8 && !(await js(`!!document.querySelector('.modal__box')`)); i++) {
+  await shot(`04-turn-${i}`, '.board3d');
+}
+await castStop('turn');
+console.log('чип:', await chip());
 await shot('05-arrival', '.board3d');
 for (let i = 0; i < 40 && !(await js(`!!document.querySelector('.modal__box')`)); i++) await wait(150);
 await shot('06-card', '.board3d');
@@ -113,6 +145,7 @@ console.log('карта:', await js(`document.querySelector('.modal__box')?.inne
 console.log('журнал:', await js(`[...document.querySelectorAll('.log__row')].slice(0,5).map(r=>r.innerText).join(' ;; ')`));
 
 let bought = false;
+let rolls = 0;
 for (let i = 0; i < 70; i++) {
   const done = await js(`(() => {
     const box = document.querySelector('.modal__box');
@@ -129,6 +162,11 @@ for (let i = 0; i < 70; i++) {
     return label;
   })()`);
   await wait(620);
+  if (done === 'Бросить кубики' && rolls < 4) {
+    /** Снимаем во время ходьбы: после открытия карточки поле под размытием, а камера ведёт фишку всю дорогу. */
+    console.log('чип:', await waitChip('='));
+    await shot(`1${++rolls}-walk`, '.board3d');
+  }
   if (done.startsWith('Выкупить') && !bought) {
     bought = true;
     await wait(900);

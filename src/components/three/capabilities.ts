@@ -13,8 +13,8 @@ export function hasWebGL() {
 /** Хронометраж хода: кубики прыгают → фишка идёт по кольцу → пауза → карточка. */
 export const DICE_ROLL_MS = 1150;
 export const WALK_STEP_MS = 185;
-/** Пауза на клетке прибытия: камера успевает навестись на неё до карточки. */
-export const ARRIVE_BEAT_MS = 700;
+/** Пауза на клетке прибытия: камера ведёт фишку всю дорогу, ей надо только довериться. */
+export const ARRIVE_BEAT_MS = 520;
 
 export const walkMs = (steps: number) => steps * WALK_STEP_MS + ARRIVE_BEAT_MS;
 

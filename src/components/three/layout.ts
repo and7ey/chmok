@@ -29,4 +29,14 @@ export function ringPoint(f: number): [number, number] {
   return [ax + (bx - ax) * t, az + (bz - az) * t];
 }
 
+/**
+ * Текст плитки читают с внешней стороны поля, как на настоящей MONOPOLY:
+ * поворачиваем плитку по её главной оси, чтобы камера с любой стороны
+ * видела надпись прямой, а не вверх ногами.
+ */
+export function tileYaw(x: number, z: number) {
+  if (Math.abs(x) > Math.abs(z)) return Math.sign(x) * (Math.PI / 2);
+  return z < 0 ? Math.PI : 0;
+}
+
 export const OWNER_COLOR: Record<0 | 1, string> = { 0: '#5fe3b0', 1: '#ffb93b' };

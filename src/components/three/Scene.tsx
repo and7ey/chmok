@@ -4,7 +4,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import { BOARD, SPACE_COUNT } from '../../game/board';
 import type { PlayerState, Space, SpaceId } from '../../game/types';
-import { BOARD_W, CELL_XZ, OWNER_COLOR, TILE, TILE_TOP, ringPoint } from './layout';
+import { BOARD_W, CELL_XZ, OWNER_COLOR, TILE, TILE_TOP, ringPoint, tileYaw } from './layout';
 import { ARRIVE_BEAT_MS, DICE_ROLL_MS, WALK_STEP_MS } from './capabilities';
 import { checker, diceFace, signFace, stripes, tileFace, toTexture } from './textures';
 
@@ -21,6 +21,8 @@ const damp = THREE.MathUtils.damp;
 
 /** На столько плитка приподнимается под текущим ходом — фишка должна ехать вместе с ней. */
 const TILE_LIFT = 0.12;
+/** Насколько фишка сдвинута к внешнему краю плитки: название улицы остаётся на виду. */
+const OUT_SET = 0.38;
 
 /* ---------------------------------- поле --------------------------------- */
 
@@ -100,7 +102,7 @@ function Tile({
   }, [hover, interactive]);
 
   return (
-    <group ref={group} position={[x, 0, z]}>
+    <group ref={group} position={[x, 0, z]} rotation={[0, tileYaw(x, z), 0]}>
       <mesh
         castShadow
         receiveShadow
@@ -253,7 +255,8 @@ function Sign({ text }: { text: string }) {
   const materials = useMemo(() => {
     const edge = new THREE.MeshStandardMaterial({ color: '#ff4d8d', roughness: 0.5 });
     const front = new THREE.MeshStandardMaterial({ map: face, roughness: 0.45 });
-    return [edge, edge, edge, edge, front, edge];
+    /** Табличка двусторонняя: камера облетает поле, и сзади неё должен быть логотип, а не глухая стена. */
+    return [edge, edge, edge, edge, front, front];
   }, [face]);
   useEffect(
     () => () => {
@@ -305,17 +308,25 @@ function Hub({ brand }: { brand: string }) {
 
 /* --------------------------------- фишки --------------------------------- */
 
+/**
+ * Живая позиция бегущей фишки на кольце: пишет её сама фишка, читает камера,
+ * чтобы обходить поле следом за ней, а не прыгать к клетке прибытия.
+ */
+const pawnRing = { current: 0 };
+
 function Pawn({
   pos,
   color,
   offset,
   lift = 0,
+  track = false,
   onSettled,
 }: {
   pos: number;
   color: string;
   offset: number;
   lift?: number;
+  track?: boolean;
   onSettled?: () => void;
 }) {
   const group = useRef<THREE.Group>(null);
@@ -344,10 +355,19 @@ function Pawn({
       }
     }
     const idx = ((current.current % SPACE_COUNT) + SPACE_COUNT) % SPACE_COUNT;
+    if (track) pawnRing.current = idx;
     const [x, z] = ringPoint(idx);
+    /** Смещение по плитке: вдоль улицы — чтобы две фишки не сливались, наружу — чтобы фишка не легла на название улицы. */
+    const yaw = tileYaw(...CELL_XZ[Math.round(idx) % SPACE_COUNT]);
+    const ox = Math.sin(yaw);
+    const oz = Math.cos(yaw);
     const hop = remain.current > 0.001 ? Math.abs(Math.sin(idx * Math.PI)) * 0.16 : 0;
     height.current = damp(height.current, TILE_TOP + lift + hop, 10, dt);
-    g.position.set(x + offset, height.current, z);
+    g.position.set(
+      x + ox * OUT_SET + Math.cos(yaw) * offset,
+      height.current,
+      z + oz * OUT_SET - Math.sin(yaw) * offset,
+    );
   });
 
   return (
@@ -371,10 +391,12 @@ function Pawn({
 function Tokens({
   players,
   liftedIndex,
+  activeId,
   onArrive,
 }: {
   players: [PlayerState, PlayerState];
   liftedIndex?: number;
+  activeId?: 0 | 1;
   onArrive?: () => void;
 }) {
   return (
@@ -386,6 +408,7 @@ function Tokens({
           color={OWNER_COLOR[p.id]}
           offset={p.id === 0 ? -0.3 : 0.3}
           lift={liftedIndex === p.pos ? TILE_LIFT : 0}
+          track={p.id === activeId}
           onSettled={onArrive}
         />
       ))}
@@ -480,18 +503,33 @@ function Dice({ dice, rolling }: { dice: [number, number] | null; rolling: boole
   );
 }
 
-/* --------------------------------- камера -------------------------------- */
+/* -------------------------------- камера -------------------------------- */
 
 const HOME_TARGET: V3 = [0, -0.4, 0];
 /** Стартовая дистанция обзора: [0, 9.4, 14.6] относительно HOME_TARGET. */
 const HOME_DIST = 17.6;
-const CLOSE_DIST = 11.4;
+/** Крупный план клетки: фишка у ближнего к камере края, весь центр поля за ней. */
+const CELL_DIST = 11;
+/** Кубики прыгают в центре поля — на время броска камера работает на них. */
+const DICE_TARGET: V3 = [0, 0.45, 2.55];
+const DICE_DIST = 7.4;
+const HOME_AZ = 0;
+const TAU = Math.PI * 2;
+
+/** Кратчайшая дуга между азимутами: иначе на уровне ±π камера прыгает через всё поле. */
+function angleTo(from: number, to: number) {
+  let d = (to - from) % TAU;
+  if (d > Math.PI) d -= TAU;
+  if (d < -Math.PI) d += TAU;
+  return d;
+}
 
 /**
- * Пока летят кубики и фишка идёт по кольцу, наводим камеру на клетку прибытия
- * и чуть подводимся, чтобы итоговая клетка была крупно в кадре.
+ * Камера идёт за фазой хода: прыгают кубики — крупно кубики; фишка бежит —
+ * облетаем поле следом за ней, чтобы она всегда была со стороны камеры
+ * и ни одна декорация её не закрыла. В остальное время поле целиком ваше.
  */
-function CameraRig({ focus }: { focus: number | null }) {
+function CameraRig({ track, rolling }: { track: boolean; rolling: boolean }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as {
     target: THREE.Vector3;
@@ -501,17 +539,39 @@ function CameraRig({ focus }: { focus: number | null }) {
 
   useFrame((_, dt) => {
     if (!controls) return;
-    const close = focus !== null;
-    const idx = (((focus ?? 0) % SPACE_COUNT) + SPACE_COUNT) % SPACE_COUNT;
-    const [x, z] = CELL_XZ[idx];
-    const want: V3 = close ? [x, TILE_TOP + 0.1, z] : HOME_TARGET;
-    const k = 3.6;
-    controls.target.x = damp(controls.target.x, want[0], k, dt);
-    controls.target.y = damp(controls.target.y, want[1], k, dt);
-    controls.target.z = damp(controls.target.z, want[2], k, dt);
-    offset.copy(camera.position).sub(controls.target);
-    offset.setLength(damp(offset.length(), close ? CLOSE_DIST : HOME_DIST, k, dt));
-    camera.position.copy(controls.target).add(offset);
+    const t = controls.target;
+
+    let wantTarget = HOME_TARGET;
+    let wantDist = HOME_DIST;
+    let wantAz: number | null = null;
+    if (rolling) {
+      wantTarget = DICE_TARGET;
+      wantDist = DICE_DIST;
+      wantAz = HOME_AZ;
+    } else if (track) {
+      const [x, z] = ringPoint(pawnRing.current);
+      wantTarget = [x, TILE_TOP + 0.1, z];
+      wantDist = CELL_DIST;
+      wantAz = Math.atan2(x, z);
+    }
+
+    const k = 3.4;
+    t.x = damp(t.x, wantTarget[0], k, dt);
+    t.y = damp(t.y, wantTarget[1], k, dt);
+    t.z = damp(t.z, wantTarget[2], k, dt);
+
+    offset.copy(camera.position).sub(t);
+    const len = damp(offset.length(), wantDist, k, dt);
+    /** Насколько высоко смотреть — остаётся за зрителем: полярный угол не трогаем. */
+    const polar = Math.acos(THREE.MathUtils.clamp(offset.y / Math.max(offset.length(), 1e-4), -1, 1));
+    let az = Math.atan2(offset.x, offset.z);
+    if (wantAz !== null) az += angleTo(az, wantAz) * (1 - Math.exp(-4.2 * dt));
+    const sp = Math.sin(polar);
+    camera.position.set(
+      t.x + len * sp * Math.sin(az),
+      t.y + len * Math.cos(polar),
+      t.z + len * sp * Math.cos(az),
+    );
     controls.update();
   });
 
@@ -529,8 +589,10 @@ export interface SceneProps {
   rolling?: boolean;
   /** Фишка дошла до клетки и кубики успокоились — можно открывать карточку. */
   onArrive?: () => void;
-  /** Показывать ли крупно клетку прибытия; undefined — камера целиком ваша (лендинг). */
-  focus?: number | null;
+  /** Камера в игре: undefined — лендинг (не трогаем), false — поле целиком, true — вести фишку. */
+  track?: boolean;
+  /** Чья фишка сейчас ходит: камера облетает поле следом за ней. */
+  activeId?: 0 | 1;
   interactive?: boolean;
   onSelect?: (id: SpaceId) => void;
   brand: string;
@@ -544,7 +606,8 @@ export function BoardScene({
   dice,
   rolling = false,
   onArrive,
-  focus,
+  track,
+  activeId,
   interactive,
   onSelect,
   brand,
@@ -603,9 +666,16 @@ export function BoardScene({
         />
       ))}
       <Hub brand={brand} />
-      {players && <Tokens players={players} liftedIndex={currentIndex} onArrive={onArrive && handleArrive} />}
+      {players && (
+        <Tokens
+          players={players}
+          liftedIndex={currentIndex}
+          activeId={activeId}
+          onArrive={onArrive && handleArrive}
+        />
+      )}
       {dice && <Dice dice={dice} rolling={rolling} />}
-      {focus === undefined ? null : <CameraRig focus={focus} />}
+      {track === undefined ? null : <CameraRig track={track} rolling={rolling} />}
     </>
   );
 }

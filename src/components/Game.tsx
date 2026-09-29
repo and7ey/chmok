@@ -380,13 +380,10 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
     state.phase !== 'gameover';
 
   if (state && chapter && turn) {
-    /** Клетка крупным планом: во время броска предсказанная, после ходьбы — фактическая. */
+    /** Камера ведёт фишку: пока идут кубики, она занята броском (rolling). */
     const phase = state.phase;
-    const nearCell =
-      phase === 'moving' || phase === 'walking' || phase === 'buy' || phase === 'resolve' || phase === 'fate';
-    const focusCell = nearCell
-      ? (turn.pos + (phase === 'moving' && state.dice ? state.dice[0] + state.dice[1] : 0)) % BOARD.length
-      : null;
+    const tracking =
+      phase === 'walking' || phase === 'buy' || phase === 'resolve' || phase === 'fate';
     return (
       <main className="wrap game">
         <div className="game__head">
@@ -417,7 +414,8 @@ function Session({ cfg, net, onExit }: { cfg: SessionConfig; net: NetParams | nu
               players={state.players}
               owners={ownersOf(state)}
               currentIndex={turn.pos}
-              focus={focusCell}
+              track={tracking}
+              activeId={turn.id}
               dice={state.dice}
               rolling={state.phase === 'moving'}
               onArrive={onArrive}
